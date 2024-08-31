@@ -1,12 +1,16 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
-
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.svm import SVC
+import sklearn
+from sklearn import svm
 import nltk
+nltk.download('stopwords')
 from nltk.corpus import stopwords
 import pickle
+from sklearn.metrics import classification_report
+from sklearn.utils import class_weight
 
-
-w_features = set()
 
 
 # Clean stopwords, hashtags, Twitter handles, and URLs from words
@@ -30,85 +34,45 @@ def prepare_words(train):
     return dataset
 
 
-# Feature function that extracts features from word_features and structures them for use by the classifier
-def extract_features(document, word_features=None):
-    document_words = set(document)
-    features = {}
 
-    if not word_features:
-        word_features = w_features
-
-    for word in word_features:
-        features[word] = (word in document_words)
-    return features
-
-
-def test_accuracy(test, classifier):
-    test_negative = test[test['sentiment'] == 'negative']
-    test_negative = test_negative['selected_text']
-    test_neutral = test[test['sentiment'] == 'neutral']
-    test_neutral = test_neutral['selected_text']
-    test_positive = test[test['sentiment'] == 'positive']
-    test_positive = test_positive['selected_text']
-
-    negative_count = 0
-    neutral_count = 0
-    positive_count = 0
-
-    for text in test_negative:
-        result = classifier.classify(extract_features(text.split()))
-        if result == 'negative':
-            negative_count += 1
-
-    for text in test_neutral:
-        result = classifier.classify(extract_features(text.split()))
-        if result == 'neutral':
-            neutral_count += 1
-
-    for text in test_positive:
-        result = classifier.classify(extract_features(text.split()))
-        if result == 'positive':
-            positive_count += 1
-
-    print('[Negative]: %s/%s ' % (negative_count, len(test_negative)))
-    print('[Neutral]: %s/%s ' % (neutral_count, len(test_neutral)))
-    print('[Positive]: %s/%s ' % (positive_count, len(test_positive)))
-
-
+    
 def training():
     # Read the training data from the CSV and keep only the necessary columns
     data = pd.read_csv('train.csv', encoding='ISO-8859-1')
     data = data[['sentiment','selected_text']]
+    data = data.dropna(subset=['selected_text'])
+    dataset = prepare_words(data)
+    
+    # Convert preprocessed data to DataFrame for easy splitting
+    preprocessed_data = pd.DataFrame(dataset, columns=['text', 'sentiment'])
+    x = [' '.join(text) for text in preprocessed_data['text']]
+    y = preprocessed_data['sentiment']
 
-    # Splitting the dataset into train and test set
-    train, test = train_test_split(data, test_size=0.1)
+    
+    x_train, x_test, y_train, y_test = sklearn.model_selection.train_test_split(x, y, test_size = 0.1, random_state=42)
+    
+    vectorizer = TfidfVectorizer()
+    X_train_tfidf = vectorizer.fit_transform(x_train)
+    X_test_tfidf = vectorizer.transform(x_test)
 
-    # Sanitize data
-    dataset = prepare_words(train)
+    classifier = svm.SVC(kernel="linear", class_weight='balanced')
+    classifier.fit(X_train_tfidf, y_train)
 
-    # Get word features and their frequency distributions
-    global w_features
-    words = []
-    for (text, sentiment) in dataset:
-        words.extend(text)
-    w_features = nltk.FreqDist(words)
+    predictions = classifier.predict(X_test_tfidf)
 
-    # Save word features frequency to file for use when classifying
-    pickle.dump(w_features, open("w_features.pkl", 'wb'))
-    w_features = w_features.keys()
 
-    # Structure the training set and train the model
-    training_set = nltk.classify.apply_features(extract_features, dataset)
-    classifier = nltk.NaiveBayesClassifier.train(training_set)
+    report = classification_report(y_test, predictions, target_names=['negative', 'neutral', 'positive'])
+    print(report)
 
-    test_accuracy(test, classifier)
 
-    # Save model to file for use when classifying
-    filename = 'preprocess.pkl'
-    pickle.dump(classifier, open(filename, 'wb'))
+    with open('svm_model.pkl', 'wb') as f:
+        pickle.dump(classifier, f)
+    with open('tfidf_vectorizer.pkl', 'wb') as f:
+        pickle.dump(vectorizer, f)
 
 
 if __name__ == "__main__":
     training()
 
-#reference: https://www.kaggle.com/code/ngyptr/python-nltk-sentiment-analysis/notebook
+
+

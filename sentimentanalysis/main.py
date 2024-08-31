@@ -1,14 +1,36 @@
 import pickle
 import requests
 from bs4 import BeautifulSoup
-from training import extract_features
 import re
 import requests
+import nltk
+nltk.download('stopwords')
+nltk.download('PortStemmer')
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer
+from nltk import word_tokenize
+
+def preprocess_text(text):
+    stopwords_set = set(stopwords.words("english"))
+    stemmer = PorterStemmer()
+    words = word_tokenize(text)
+    cleaned_words = []
+
+    for word in words:
+        word = word.lower()
+        word = stemmer.stem(word)
+        if word not in stopwords_set and len(word) > 2:
+            cleaned_words.append(word)
+    
+    return ' '.join(cleaned_words)
+
+
 
 def main():
-    filename = "preprocess.pkl"
+    filename = "svm_model.pkl"
+    vectorizer_file = "tfidf_vectorizer.pkl"
     loaded_model = pickle.load(open(filename, "rb"))
-    loaded_features = pickle.load(open("w_features.pkl", "rb")).keys()
+    vectorizer = pickle.load(open("tfidf_vectorizer.pkl", "rb"))
     choice = int(input("Would you like to enter manual string, or take from a website? Say 1 or 2."))
     print("")
     #input validation
@@ -16,7 +38,7 @@ def main():
         choice = int(input("Make sure you choose 1 or 2."))
     if choice == 1:
         text = input("Enter a string ")
-        sentiment = analysis(text, loaded_model, loaded_features)
+        sentiment = analysis(text, loaded_model, vectorizer)
         print("This text seems to be", sentiment)
     else:
 
@@ -47,7 +69,7 @@ def main():
         # overall sentiment
         if job == 1:
             paragraphs = str(paragraphs)
-            sentiment = analysis(paragraphs, loaded_model, loaded_features)
+            sentiment = analysis(paragraphs, loaded_model, vectorizer)
             print("This text seems to be", sentiment)
 
         # categorize
@@ -59,7 +81,7 @@ def main():
             for p in paragraphs:
                 paragraphs = str(paragraphs)
                 words = p.text
-                sentiment = analysis(words, loaded_model, loaded_features)
+                sentiment = analysis(words, loaded_model, vectorizer)
                 if sentiment == "positive":
                     positive.append(words)
                 elif sentiment == "negative":
@@ -77,8 +99,11 @@ def main():
                 print(i)
 
 
-def analysis(text, loaded_model, loaded_features):
-    sentiment_score = loaded_model.classify(extract_features(text.lower().split(), loaded_features))
+def analysis(text, loaded_model, vectorizer):
+    preprocessed_text = preprocess_text(text)
+    transformed_text = vectorizer.transform([preprocessed_text])
+    sentiment_score = loaded_model.predict(transformed_text)[0]
+
     return sentiment_score
 
 
