@@ -17,16 +17,29 @@ from sklearn.utils import class_weight
 def prepare_words(train):
     dataset = []
     stopwords_set = set(stopwords.words("english"))
+    
+    # Regex patterns for cleaning
+    url_pattern = re.compile(r'http\S+|www\S+')
+    special_char_pattern = re.compile(r'[^\w\s]')  # Matches special characters
+
     for index, row in train.iterrows():
         if type(row.selected_text) != str:
             continue
 
         cleaned_words = []
         for word in row.selected_text.split():
+            # Skip words that are too short or contain unwanted patterns
             if len(word) < 3:
                 continue
             word = word.lower()
-            if 'http' not in word and not word.startswith('@') and not word.startswith('#') and word != 'RT' and word not in stopwords_set:
+            
+            # Remove URLs using regex
+            word = url_pattern.sub('', word)
+            
+            # Remove special characters using regex
+            word = special_char_pattern.sub('', word)
+            
+            if not word.startswith('@') and not word.startswith('#') and word != 'rt' and word not in stopwords_set:
                 cleaned_words.append(word)
 
         dataset.append((cleaned_words, row.sentiment))
