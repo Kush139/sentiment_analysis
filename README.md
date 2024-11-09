@@ -1,4 +1,4 @@
-# sentiment_analysis project made for my final prject in my grade 12 computer science class
+# sentiment_analysis machine learning project
 
 Uses panda for data manipulation, NLTK for langauge processing, making up the sentiment analysis portion
 
